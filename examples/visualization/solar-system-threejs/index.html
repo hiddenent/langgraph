@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>태양계 3D 시뮬레이션</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: radial-gradient(circle at 20% 20%, #1a1a2e, #050510 50%);
+        font-family: "Pretendard", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+      #info {
+        position: fixed;
+        inset: 16px auto auto 16px;
+        padding: 10px 12px;
+        background: rgba(10, 10, 20, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        backdrop-filter: blur(8px);
+        color: #e6e6f0;
+        max-width: 320px;
+        line-height: 1.5;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+      }
+      a {
+        color: #8ad9ff;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      <strong>태양계 3D 시뮬레이션</strong>
+      <div>마우스를 드래그해서 시점을 움직이고, 휠로 확대/축소할 수 있습니다.</div>
+    </div>
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
+      import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js";
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x02030a);
+
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200
+      );
+      camera.position.set(0, 12, 28);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 80;
+      controls.minDistance = 6;
+
+      // 태양
+      const sunGeometry = new THREE.SphereGeometry(2.4, 64, 64);
+      const sunMaterial = new THREE.MeshStandardMaterial({
+        emissive: new THREE.Color(0xffcc66),
+        emissiveIntensity: 1.8,
+        color: 0x442200,
+        roughness: 0.3,
+      });
+      const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+      scene.add(sun);
+
+      // 태양 빛과 약간의 기본 조명
+      const sunLight = new THREE.PointLight(0xffddaa, 2.4, 180, 2);
+      scene.add(sunLight);
+      const ambient = new THREE.AmbientLight(0x0a0a14, 0.8);
+      scene.add(ambient);
+
+      // 별 배경
+      const starGeometry = new THREE.BufferGeometry();
+      const starCount = 1200;
+      const positions = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        const radius = THREE.MathUtils.randFloat(40, 120);
+        const theta = THREE.MathUtils.randFloatSpread(360) * (Math.PI / 180);
+        const phi = THREE.MathUtils.randFloatSpread(360) * (Math.PI / 180);
+        positions[i] = radius * Math.sin(theta) * Math.cos(phi);
+        positions[i + 1] = radius * Math.sin(theta) * Math.sin(phi);
+        positions[i + 2] = radius * Math.cos(theta);
+      }
+      starGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const stars = new THREE.Points(
+        starGeometry,
+        new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, sizeAttenuation: true })
+      );
+      scene.add(stars);
+
+      // 행성 데이터 (예시 값)
+      const planetConfigs = [
+        { name: "수성", radius: 0.6, distance: 4, speed: 1.5, color: 0x7f9cff, tilt: 0.08 },
+        { name: "금성", radius: 0.9, distance: 6.7, speed: 1.2, color: 0xffae6b, tilt: 0.04 },
+        { name: "지구", radius: 1, distance: 9.2, speed: 1, color: 0x5ad0ff, tilt: 0.41 },
+        { name: "화성", radius: 0.8, distance: 11.5, speed: 0.8, color: 0xff7b5f, tilt: 0.25 },
+        { name: "목성", radius: 1.6, distance: 15.5, speed: 0.45, color: 0xe0c7a3, tilt: 0.05 },
+        { name: "토성", radius: 1.4, distance: 19, speed: 0.35, color: 0xd8b98a, tilt: 0.03 },
+      ];
+
+      const planets = [];
+      const ringMaterial = new THREE.LineBasicMaterial({ color: 0x222a4d, transparent: true, opacity: 0.6 });
+
+      planetConfigs.forEach((config) => {
+        const geometry = new THREE.SphereGeometry(config.radius, 32, 32);
+        const material = new THREE.MeshStandardMaterial({
+          color: config.color,
+          roughness: 0.5,
+          metalness: 0.2,
+        });
+        const planet = new THREE.Mesh(geometry, material);
+        planet.rotation.x = config.tilt;
+
+        const orbitPoints = new THREE.EllipseCurve(0, 0, config.distance, config.distance, 0, 2 * Math.PI);
+        const orbitGeometry = new THREE.BufferGeometry().setFromPoints(
+          orbitPoints.getPoints(180).map((p) => new THREE.Vector3(p.x, 0, p.y))
+        );
+        const orbit = new THREE.LineLoop(orbitGeometry, ringMaterial);
+
+        planets.push({ ...config, mesh: planet, orbit });
+        scene.add(planet);
+        scene.add(orbit);
+      });
+
+      // 토성의 고리
+      const saturn = planets.find((p) => p.name === "토성");
+      if (saturn) {
+        const ringGeometry = new THREE.RingGeometry(saturn.radius * 1.2, saturn.radius * 1.8, 64);
+        ringGeometry.rotateX(-Math.PI / 2);
+        const ring = new THREE.Mesh(
+          ringGeometry,
+          new THREE.MeshStandardMaterial({
+            color: 0xdcc9a6,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.6,
+            metalness: 0.1,
+          })
+        );
+        ring.position.set(saturn.distance, 0, 0);
+        saturn.mesh.add(ring);
+      }
+
+      const clock = new THREE.Clock();
+
+      function animate() {
+        const elapsed = clock.getElapsedTime();
+        sun.rotation.y += 0.0025;
+        stars.rotation.y += 0.0005;
+
+        planets.forEach((planet) => {
+          const angle = elapsed * planet.speed;
+          const x = Math.cos(angle) * planet.distance;
+          const z = Math.sin(angle) * planet.distance;
+          planet.mesh.position.set(x, 0, z);
+          planet.mesh.rotation.y += 0.01;
+          planet.orbit.rotation.y = 0.0;
+        });
+
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
