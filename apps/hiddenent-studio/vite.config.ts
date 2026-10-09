@@ -7,7 +7,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 // connect-src 'self' 로 미디어가 외부 서버로 전송될 수 있는 경로를 차단한다.
 const CSP =
   "default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; " +
-  "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'";
+  "script-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'";
 
 function cspPlugin(): Plugin {
   return {

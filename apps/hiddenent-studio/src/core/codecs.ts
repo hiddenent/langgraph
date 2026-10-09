@@ -16,29 +16,35 @@ interface Candidate {
   audio: string | null;
 }
 
-// 우선순위 순서: 범용 재생 호환성이 높은 MP4(H.264/AAC) → WebM(VP9/VP8/AV1).
+// 우선순위 순서: 범용 재생 호환성이 높은 MP4(H.264) → WebM(VP9/VP8) → MP4(VP9/AV1) → 브라우저 기본.
+// 주의: Chromium 의 'video/mp4'(코덱 미지정)는 VP9/Opus MP4 를 만들 수 있어 호환성이 낮으므로 마지막에 둔다.
 const CANDIDATES: Candidate[] = [
   { mime: 'video/mp4;codecs=avc1.640028,mp4a.40.2', container: 'mp4', video: 'H.264 High', audio: 'AAC' },
   { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', container: 'mp4', video: 'H.264 Baseline', audio: 'AAC' },
+  { mime: 'video/mp4;codecs=avc1,mp4a.40.2', container: 'mp4', video: 'H.264', audio: 'AAC' },
   { mime: 'video/mp4;codecs=avc1,opus', container: 'mp4', video: 'H.264', audio: 'Opus' },
-  { mime: 'video/mp4;codecs=hvc1.1.6.L120.B0,mp4a.40.2', container: 'mp4', video: 'H.265/HEVC', audio: 'AAC' },
-  { mime: 'video/mp4', container: 'mp4', video: '브라우저 기본', audio: '브라우저 기본' },
   { mime: 'video/webm;codecs=vp9,opus', container: 'webm', video: 'VP9', audio: 'Opus' },
   { mime: 'video/webm;codecs=vp8,opus', container: 'webm', video: 'VP8', audio: 'Opus' },
   { mime: 'video/webm;codecs=av01,opus', container: 'webm', video: 'AV1', audio: 'Opus' },
   { mime: 'video/webm;codecs=h264,opus', container: 'webm', video: 'H.264', audio: 'Opus' },
-  { mime: 'video/webm', container: 'webm', video: '브라우저 기본', audio: '브라우저 기본' },
+  { mime: 'video/mp4;codecs=hvc1.1.6.L120.B0,mp4a.40.2', container: 'mp4', video: 'H.265/HEVC', audio: 'AAC' },
+  { mime: 'video/mp4;codecs=vp9,opus', container: 'mp4', video: 'VP9', audio: 'Opus' },
+  { mime: 'video/mp4;codecs=av01,opus', container: 'mp4', video: 'AV1', audio: 'Opus' },
   { mime: 'video/x-matroska;codecs=avc1,opus', container: 'mkv', video: 'H.264', audio: 'Opus' },
+  { mime: 'video/webm', container: 'webm', video: '브라우저 기본', audio: '브라우저 기본' },
+  { mime: 'video/mp4', container: 'mp4', video: '브라우저 기본', audio: '브라우저 기본' },
 ];
 
 const VIDEO_ONLY: Candidate[] = [
   { mime: 'video/mp4;codecs=avc1.640028', container: 'mp4', video: 'H.264 High', audio: null },
   { mime: 'video/mp4;codecs=avc1.42E01E', container: 'mp4', video: 'H.264 Baseline', audio: null },
-  { mime: 'video/mp4', container: 'mp4', video: '브라우저 기본', audio: null },
+  { mime: 'video/mp4;codecs=avc1', container: 'mp4', video: 'H.264', audio: null },
   { mime: 'video/webm;codecs=vp9', container: 'webm', video: 'VP9', audio: null },
   { mime: 'video/webm;codecs=vp8', container: 'webm', video: 'VP8', audio: null },
   { mime: 'video/webm;codecs=av01', container: 'webm', video: 'AV1', audio: null },
+  { mime: 'video/mp4;codecs=vp9', container: 'mp4', video: 'VP9', audio: null },
   { mime: 'video/webm', container: 'webm', video: '브라우저 기본', audio: null },
+  { mime: 'video/mp4', container: 'mp4', video: '브라우저 기본', audio: null },
 ];
 
 const EXT: Record<RecordingFormat['container'], string> = { mp4: 'mp4', webm: 'webm', mkv: 'mkv' };

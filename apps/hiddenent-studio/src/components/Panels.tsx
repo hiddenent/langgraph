@@ -178,7 +178,7 @@ export function VideoSettingsPanel() {
     <Panel title="동영상 설정" icon="video">
       {locked && <LockNote />}
       <Select label="해상도" value={v.resolutionId} options={resOptions} disabled={locked} onChange={(x) => patch('video', { resolutionId: x })} testId="video-resolution" />
-      <Select label="프레임 레이트" value={v.frameRate} options={fpsOptions} disabled={locked} onChange={(x) => patch('video', { frameRate: x })} />
+      <Select label="프레임 레이트" value={v.frameRate} options={fpsOptions} disabled={locked} onChange={(x) => patch('video', { frameRate: x })} testId="video-fps" />
       {s && (
         <p className={`note ${resMismatch || fpsMismatch ? 'note--warn' : ''}`} data-testid="applied-video">
           실제 적용: <b>{s.width}×{s.height}</b>

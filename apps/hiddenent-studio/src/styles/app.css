@@ -1995,9 +1995,6 @@ input[type='range'] {
   .meter__scale {
     margin: 0 98px 0 20px;
   }
-  .meter__scale span:nth-child(even) {
-    display: none;
-  }
   .histogram {
     width: 128px;
     height: 48px;

@@ -17,7 +17,7 @@ import type { AudioMeterHandle } from '../hooks/useAudioMeter';
 import type { DeviceStatus } from '../hooks/useMediaSession';
 import { Icon } from './Icon';
 
-const TICKS = [-60, -48, -40, -30, -24, -18, -12, -6, -3, 0];
+const TICKS = [-60, -40, -24, -12, -6, 0];
 
 interface Props {
   handle: AudioMeterHandle;
