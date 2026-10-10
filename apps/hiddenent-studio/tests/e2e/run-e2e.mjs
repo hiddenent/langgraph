@@ -776,7 +776,17 @@ async function main() {
     await mp.getByTestId('rec-indicator').waitFor();
     await sleep(1000);
     await mp.getByTestId('record-stop').click();
-    await mp.getByTestId('review-card').waitFor({ timeout: 10000 });
+    try {
+      await mp.getByTestId('review-card').waitFor({ timeout: 10000 });
+    } catch (e) {
+      await mp.screenshot({ path: path.join(OUT, 'mobile-failure.png'), fullPage: true });
+      const diag = await mp.evaluate(() => ({
+        ctrl: document.querySelector('.ctrl')?.innerText.replace(/\n/g, ' | '),
+        toasts: [...document.querySelectorAll('[data-testid="toast"]')].map((t) => t.innerText),
+        thumbs: document.querySelector('.thumbs')?.innerText.replace(/\n/g, ' '),
+      }));
+      throw new Error(`${e.message.split('\n')[0]} — ${JSON.stringify(diag)}`);
+    }
     await m.close();
     assert(st.overflow <= 0 && st.navPos === 'fixed' && st.meter && st.frameW > 300, JSON.stringify(st));
     return `nav=${st.navPos}, 미리보기 폭 ${Math.round(st.frameW)}px, 미터 표시, 모바일 녹화 OK`;

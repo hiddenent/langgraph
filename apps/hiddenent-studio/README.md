@@ -12,6 +12,17 @@
 
 ---
 
+## 0. HTML 파일 하나로 바로 실행 (설치 불필요)
+
+[`standalone/hiddenent-studio.html`](standalone/hiddenent-studio.html) 은 JavaScript·CSS·아이콘을 모두 포함한
+**단일 HTML 파일**(약 330 KB)입니다. 외부 리소스를 하나도 불러오지 않습니다.
+
+- **PC**: 파일을 내려받아 Chrome·Edge·Firefox 로 더블클릭해 엽니다(`file://` 에서도 카메라·마이크 권한 요청이 뜹니다).
+- **모바일/다른 사람과 공유**: 이 파일 하나를 HTTPS 웹 서버(GitHub Pages, Netlify 등)에 올리면 됩니다.
+  모바일 브라우저는 `file://` 로 연 페이지의 카메라 사용을 막는 경우가 많습니다.
+- Safari 는 `file://` 페이지의 카메라 접근을 허용하지 않을 수 있으므로 HTTPS 주소로 여세요.
+- 다시 만들기: `npm run build:single` → `standalone/hiddenent-studio.html`
+
 ## 1. 설치 및 실행
 
 요구 사항: Node.js 18 이상(20/22 권장), 최신 Chrome·Edge·Firefox·Safari.
@@ -27,6 +38,7 @@ npm run dev            # http://localhost:5173  (localhost 는 보안 컨텍스�
 | `npm run dev` | 개발 서버(HMR) |
 | `npm run dev:https` | 자체 서명 인증서 HTTPS 개발 서버 — 같은 Wi-Fi 의 휴대폰에서 `https://<PC IP>:5173` 으로 테스트 |
 | `npm run build` | 타입 검사 + 프로덕션 빌드(`dist/`) |
+| `npm run build:single` | 단일 HTML 파일 빌드(`standalone/hiddenent-studio.html`) |
 | `npm run preview` / `preview:https` | 빌드 결과 미리보기 |
 | `npm test` | 단위 테스트(Vitest) |
 | `npm run test:e2e` | 빌드 결과를 Chromium 가짜 장치로 E2E 검증(`npm run build` 먼저). `CHROMIUM_PATH` 로 브라우저 지정 |
@@ -75,6 +87,7 @@ apps/hiddenent-studio/
 ├── index.html                 # 앱 셸
 ├── vite.config.ts             # Vite 설정(HTTPS 모드, 프로덕션 CSP 주입, Vitest)
 ├── public/favicon.svg
+├── standalone/hiddenent-studio.html  # 모든 코드를 담은 단일 HTML 파일(빌드 결과)
 ├── src/
 │   ├── main.tsx / App.tsx     # 진입점, 레이아웃·메뉴·단축키·페이지 이탈 처리
 │   ├── StudioContext.ts       # 화면 간 공유 상태
