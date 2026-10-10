@@ -14,6 +14,8 @@ import { buildAudioConstraints, buildVideoConstraints, describeMediaError } from
 import { buildFileName, formatBytes, formatDuration, renameKeepingExtension, sanitizeFileName } from '../../src/core/format';
 import { centerCrop, fitLongEdge } from '../../src/core/photo';
 import { DEFAULT_SETTINGS, mergeSettings, videoBitrateFor } from '../../src/core/settings';
+import { detectPlatform, externalOpenUrl, orientAspect } from '../../src/core/mobile';
+import { CLONE_SILENCE_FRAMES, shouldFallbackToOriginal } from '../../src/core/audioMeterEngine';
 
 describe('audio level (dBFS)', () => {
   it('full-scale sine RMS is about -3 dBFS and peak 0 dBFS', () => {
@@ -243,5 +245,66 @@ describe('settings', () => {
     expect(videoBitrateFor('high', 0, 1080)).toBe(8_000_000);
     expect(videoBitrateFor('high', 0, 2160)).toBe(32_000_000);
     expect(videoBitrateFor('custom', 1234, 720)).toBe(1234);
+  });
+});
+
+describe('mobile compatibility', () => {
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
+  const KAKAO_AOS = `${ANDROID} KAKAOTALK 10.8.0`;
+  const IPAD_DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+
+  it('detects iPhone, Android, iPadOS(desktop UA + touch) and file://', () => {
+    expect(detectPlatform(IPHONE, 5, 'https:')).toMatchObject({ ios: true, android: false, mobile: true, inApp: null });
+    expect(detectPlatform(ANDROID, 5, 'https:')).toMatchObject({ ios: false, android: true, mobile: true });
+    expect(detectPlatform(IPAD_DESKTOP_UA, 5, 'https:').ios).toBe(true);
+    expect(detectPlatform(IPAD_DESKTOP_UA, 0, 'https:').ios).toBe(false);
+    expect(detectPlatform(ANDROID, 5, 'file:').fileProtocol).toBe(true);
+  });
+
+  it('detects in-app browsers and builds external-open links', () => {
+    const k = detectPlatform(KAKAO_AOS, 5, 'https:');
+    expect(k.inApp).toBe('카카오톡');
+    expect(externalOpenUrl(k, 'https://example.com/s.html?a=1')).toBe(
+      'kakaotalk://web/openExternal?url=https%3A%2F%2Fexample.com%2Fs.html%3Fa%3D1',
+    );
+    const naverAndroid = detectPlatform(`${ANDROID} NAVER(inapp; search; 1000; 12.0.0)`, 5, 'https:');
+    expect(naverAndroid.inApp).toBe('네이버 앱');
+    expect(externalOpenUrl(naverAndroid, 'https://example.com/s.html')).toBe(
+      'intent://example.com/s.html#Intent;scheme=https;package=com.android.chrome;end',
+    );
+    expect(externalOpenUrl(detectPlatform(`${IPHONE} Instagram 300.0`, 5, 'https:'), 'https://example.com/')).toBeNull();
+    expect(externalOpenUrl(k, 'file:///sdcard/a.html')).toBeNull();
+  });
+
+  it('switches landscape aspect to portrait for portrait camera frames', () => {
+    expect(orientAspect(16 / 9, { w: 1080, h: 1920 }, true)).toBeCloseTo(9 / 16);
+    expect(orientAspect(4 / 3, { w: 720, h: 960 }, true)).toBeCloseTo(3 / 4);
+    expect(orientAspect(16 / 9, { w: 1920, h: 1080 }, true)).toBeCloseTo(16 / 9);
+    expect(orientAspect(9 / 16, { w: 1920, h: 1080 }, true)).toBeCloseTo(9 / 16); // 사용자가 고른 세로 비율 유지
+    expect(orientAspect(16 / 9, { w: 1080, h: 1920 }, false)).toBeCloseTo(16 / 9);
+    expect(orientAspect(1, { w: 1080, h: 1920 }, true)).toBe(1);
+    expect(orientAspect(16 / 9, { w: 0, h: 0 }, true)).toBeCloseTo(16 / 9);
+  });
+
+  it('falls back from silent clone to original track only when the original is live and unmuted', () => {
+    const live = { enabled: true, readyState: 'live' };
+    expect(shouldFallbackToOriginal(CLONE_SILENCE_FRAMES, true, live)).toBe(true);
+    expect(shouldFallbackToOriginal(CLONE_SILENCE_FRAMES - 1, true, live)).toBe(false);
+    expect(shouldFallbackToOriginal(CLONE_SILENCE_FRAMES, false, live)).toBe(false);
+    expect(shouldFallbackToOriginal(CLONE_SILENCE_FRAMES, true, { enabled: false, readyState: 'live' })).toBe(false); // 음소거
+    expect(shouldFallbackToOriginal(CLONE_SILENCE_FRAMES, true, { enabled: true, readyState: 'ended' })).toBe(false);
+  });
+
+  it('offers a browser-default recording format when isTypeSupported rejects everything', () => {
+    const f = getSupportedFormats(true, () => false);
+    expect(f).toHaveLength(1);
+    expect(f[0].mimeType).toBe('');
+    expect(pickFormat(f, 'auto')?.label).toContain('브라우저 기본');
+  });
+
+  it('recognizes the quoted iOS mp4 codec string', () => {
+    const iosSafari = (t: string) => t === 'video/mp4;codecs="avc1.42E01E, mp4a.40.2"' || t === 'video/mp4';
+    expect(pickFormat(getSupportedFormats(true, iosSafari), 'auto')?.mimeType).toBe('video/mp4;codecs="avc1.42E01E, mp4a.40.2"');
   });
 });

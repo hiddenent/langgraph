@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { canShareFile } from '../core/mobile';
 import { downloadBlob } from '../core/download';
 import { formatBytes, formatDateTime, formatDuration, renameKeepingExtension } from '../core/format';
 import type { MediaItem } from '../core/storage';
@@ -25,6 +26,30 @@ export function safeDownload(item: MediaItem, notify: (k: 'error', m: string) =>
   } catch (e) {
     notify('error', `다운로드 실패: ${e instanceof Error ? e.message : '알 수 없는 오류'}`);
   }
+}
+
+/** 모바일 공유 시트: 아이폰 '비디오/이미지 저장'(사진 앱), 안드로이드 갤러리·다른 앱으로 저장. 사용자 버튼으로만 실행. */
+export function ShareButton({ item, small }: { item: MediaItem; small?: boolean }) {
+  const { notify } = useStudio();
+  const file = useMemo(() => new File([item.blob], item.name, { type: item.blob.type || item.mime }), [item.blob, item.name, item.mime]);
+  if (!canShareFile(file)) return null;
+  return (
+    <button
+      type="button"
+      className={`btn ${small ? 'btn--sm' : ''}`}
+      data-testid="share-button"
+      title="휴대폰 공유 메뉴를 엽니다. '비디오 저장'·'이미지 저장'을 고르면 사진 앱(갤러리)에 저장됩니다."
+      onClick={async () => {
+        try {
+          await navigator.share({ files: [file], title: item.name });
+        } catch (e) {
+          if ((e as { name?: string })?.name !== 'AbortError') notify('error', '공유 메뉴를 열지 못했습니다. 다운로드 버튼을 이용하세요.');
+        }
+      }}
+    >
+      <Icon name="save" size={small ? 16 : 18} /> 사진 앱 저장·공유
+    </button>
+  );
 }
 
 export function MediaViewer({ itemId, onClose }: { itemId: string; onClose(): void }) {
@@ -62,6 +87,7 @@ export function MediaViewer({ itemId, onClose }: { itemId: string; onClose(): vo
             <button type="button" className="btn btn--primary" onClick={() => safeDownload(item, notify)} data-testid="viewer-download">
               <Icon name="download" /> 다운로드
             </button>
+            <ShareButton item={item} />
             <button
               type="button"
               className="btn"
@@ -244,6 +270,7 @@ export function ReviewCard({ item, onClose, onOpen }: { item: MediaItem; onClose
         <button type="button" className="btn btn--primary btn--sm" onClick={() => safeDownload(item, notify)} data-testid="review-download">
           <Icon name="download" size={16} /> 저장
         </button>
+        <ShareButton item={item} small />
         <button type="button" className="btn btn--sm" onClick={onOpen}>
           <Icon name="eye" size={16} /> {item.kind === 'video' ? '재생' : '보기'}
         </button>

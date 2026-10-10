@@ -6,7 +6,7 @@
 
 - 기술: React 18 + TypeScript + Vite (런타임 의존성: `react`, `react-dom`, `fflate`(ZIP), `fix-webm-duration`)
 - 사용 API: `getUserMedia` / `enumerateDevices` / `MediaRecorder` / Web Audio `AnalyserNode` / Canvas / `ImageCapture` / IndexedDB / StorageManager
-- 테스트: 단위 36건(Vitest) + 실제 Chromium E2E 44건 **모두 통과** → [docs/TEST_REPORT.md](docs/TEST_REPORT.md)
+- 테스트: 단위 42건(Vitest) + 실제 Chromium E2E 49건 **모두 통과** → [docs/TEST_REPORT.md](docs/TEST_REPORT.md)
 
 ![데스크톱 동영상 모드](docs/screenshots/desktop-video.png)
 
@@ -15,13 +15,47 @@
 ## 0. HTML 파일 하나로 바로 실행 (설치 불필요)
 
 [`standalone/hiddenent-studio.html`](standalone/hiddenent-studio.html) 은 JavaScript·CSS·아이콘을 모두 포함한
-**단일 HTML 파일**(약 330 KB)입니다. 외부 리소스를 하나도 불러오지 않습니다.
+**단일 HTML 파일**(약 340 KB)입니다. 외부 리소스를 하나도 불러오지 않습니다.
 
 - **PC**: 파일을 내려받아 Chrome·Edge·Firefox 로 더블클릭해 엽니다(`file://` 에서도 카메라·마이크 권한 요청이 뜹니다).
-- **모바일/다른 사람과 공유**: 이 파일 하나를 HTTPS 웹 서버(GitHub Pages, Netlify 등)에 올리면 됩니다.
-  모바일 브라우저는 `file://` 로 연 페이지의 카메라 사용을 막는 경우가 많습니다.
-- Safari 는 `file://` 페이지의 카메라 접근을 허용하지 않을 수 있으므로 HTTPS 주소로 여세요.
 - 다시 만들기: `npm run build:single` → `standalone/hiddenent-studio.html`
+
+### 안드로이드폰·아이폰에서 사용하기
+
+휴대폰 브라우저는 **HTTPS 주소에서만** 카메라·마이크를 허용합니다. 파일 앱·메신저에서 HTML 파일을 직접 열면
+(`file://`, `content://`) 카메라가 차단되므로, 파일 하나를 HTTPS 로 올려 그 주소로 엽니다.
+
+1. **가장 쉬운 방법 — Netlify Drop**: PC 브라우저에서 <https://app.netlify.com/drop> 을 열고 `hiddenent-studio.html` 을
+   끌어다 놓습니다(파일 이름을 `index.html` 로 바꾸면 주소가 짧아집니다). 생성된 `https://….netlify.app` 주소를 휴대폰에서 엽니다.
+2. **GitHub Pages**: 저장소에 `index.html` 로 올리고 Settings → Pages 에서 배포를 켭니다.
+3. 휴대폰에서 주소를 열고 **[카메라·마이크 시작]** 을 누른 뒤 권한을 '허용'합니다.
+
+| 항목 | 아이폰 (iOS) | 안드로이드 |
+|---|---|---|
+| 권장 브라우저 | **Safari** (iOS 14.3 이상, 녹화는 14.5 이상) | **Chrome** (최신) |
+| 녹화 형식 | MP4 (H.264 + AAC) | WebM (VP8/VP9 + Opus), 기기에 따라 MP4 |
+| 사진 앱(갤러리)에 저장 | **[사진 앱 저장·공유]** → '비디오 저장'/'이미지 저장' | **[사진 앱 저장·공유]** 또는 [저장](다운로드 폴더) |
+| 카카오톡·네이버 등 앱 안에서 열었을 때 | 상단 안내 → ··· 메뉴의 'Safari로 열기' | 상단 **[Chrome으로 열기]** 버튼 |
+
+모바일 대응으로 추가된 동작:
+
+- **인앱 브라우저 감지**: 카카오톡·네이버·다음·인스타그램·페이스북·라인·밴드 등 앱 내장 브라우저를 감지해 외부 브라우저로 여는
+  버튼(카카오톡 `kakaotalk://web/openExternal`, 안드로이드 Chrome intent)과 안내를 표시합니다. 휴대폰에서 `file://` 로 열었거나
+  HTTPS 가 아닌 경우에도 원인과 해결 방법을 표시합니다.
+- **iOS 오디오 미터**: [시작] 버튼을 누르는 순간(사용자 터치 안에서) 공유 AudioContext 를 만들고 재개합니다. iOS 의 AudioContext 개수
+  제한을 피하려고 미터·효과음이 하나를 공유합니다. 일부 iOS 에서 복제 트랙이 무음만 내는 문제는 3초간 완전 무음이면 원본 트랙을
+  읽기 전용으로 분석하도록 자동 전환합니다(녹음 데이터는 바뀌지 않음).
+- **세로 방향 자동 맞춤**: 휴대폰을 세로로 들어 카메라가 세로 프레임을 보내면 16:9·4:3 설정을 9:16·3:4 로 자동 전환합니다
+  (미리보기·녹화·사진 모두 적용, 설정에서 끌 수 있음).
+- **앱 전환 후 자동 재연결**: iOS·안드로이드가 백그라운드에서 카메라·마이크를 끊으면, 화면으로 돌아올 때 녹화 중이 아니라면 자동으로
+  다시 연결하고 멈춘 미리보기를 다시 재생합니다.
+- **녹화 형식 대체**: `isTypeSupported` 가 아무 형식도 인정하지 않는 브라우저에서도 형식을 지정하지 않고 기본값으로 녹화하며,
+  옵션을 거부하면 옵션 없이 다시 시도합니다. iOS 의 따옴표 표기(`codecs="avc1.42E01E, mp4a.40.2"`)도 확인합니다.
+- **짧은 녹화 보호**: 인코더가 첫 데이터를 내기 전에 정지하면(느린 휴대폰, 아주 짧은 녹화) 빈 파일이 되던 문제를 막기 위해
+  첫 데이터가 도착할 때까지(최대 4초) 기다린 뒤 정지합니다.
+- **사진 앱 저장·공유**: Web Share API(파일 공유)를 지원하면 버튼을 표시합니다. 사용자가 누를 때만 OS 공유 메뉴가 열리며 앱이
+  직접 외부로 전송하지 않습니다.
+- **터치 사용성**: 더블탭 확대 방지, iOS 입력창 자동 확대 방지(16px), 노치 안전 영역, 더 큰 셔터 버튼.
 
 ## 1. 설치 및 실행
 
@@ -209,6 +243,8 @@ getUserMedia(audio) ──► 마이크 트랙(녹음용, 음소거=track.enable
 - 프레임 레이트는 카메라 보고값이며, 저장 파일의 실제 프레임 수는 조명·CPU 부하에 따라 낮아질 수 있습니다.
 - 라이브러리의 ZIP·로컬 보관은 파일 전체를 메모리에 올리므로 매우 큰 동영상(수 GB)은 개별 다운로드를 권장합니다.
 - 브라우저는 OS 장치 이름만 제공하므로 장치 목록에는 브라우저가 보고한 이름을 그대로 보여줍니다(물리 장치 매핑을 추정하지 않음).
+- 아이폰(iOS Safari, WebKit)은 이 환경에서 실행할 수 없어 아이폰 UA·화면 크기로 에뮬레이션한 Chromium 으로만 검증했습니다.
+  iOS 전용 경로(AudioContext 잠금 해제, 복제 트랙 무음 대체, MP4 녹화)는 실제 아이폰에서 확인이 필요합니다.
 - E2E 는 Chromium 가짜 장치로 수행했으며, 실제 USB 장치·모바일 기기 검증은 [체크리스트](docs/TEST_REPORT.md#실기기-검증-체크리스트-배포-후-수행-권장)로 남겨 두었습니다.
 
 ## 8. 향후 개선

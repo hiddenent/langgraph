@@ -402,6 +402,23 @@ async function main() {
     return `항목 ${n0} → ${n0 + 1}`;
   });
 
+  await test('시작 직후 바로 정지해도 파일 생성(첫 데이터 대기)', async () => {
+    const n0 = await itemCount();
+    for (let i = 0; i < 3; i++) {
+      await page.getByTestId('record-start').click();
+      await page.getByTestId('record-stop').click();
+      await page.getByTestId('record-start').waitFor({ timeout: 15000 });
+    }
+    await page.waitForFunction(
+      (n) => Number(((document.querySelector('.thumbs .btn')?.textContent ?? '').match(/\((\d+)\)/) || [])[1]) === n + 3,
+      n0,
+      { timeout: 5000 },
+    );
+    videoCount += 3;
+    await closeModals();
+    return `즉시 정지 3회 → 파일 3개 (항목 ${n0} → ${n0 + 3})`;
+  });
+
   await test('입력창 편집 중에는 단축키 무시', async () => {
     const input = page.getByLabel('저장 파일명 템플릿');
     await input.click();
@@ -760,6 +777,15 @@ async function main() {
 
   await test('모바일 레이아웃(390×844): 하단 탭, 가로 스크롤 없음, 미터 표시', async () => {
     const m = await A.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    // 실패 시 원인 파악용: 사라지기 전에 모든 알림을 기록한다.
+    await m.addInitScript(() => {
+      window.__toastLog = [];
+      new MutationObserver(() => {
+        document.querySelectorAll('[data-testid="toast"]').forEach((t) => {
+          if (!window.__toastLog.includes(t.textContent)) window.__toastLog.push(t.textContent);
+        });
+      }).observe(document, { childList: true, subtree: true });
+    });
     const mp = await m.newPage();
     await mp.goto(base);
     await mp.getByTestId('start-devices').click();
@@ -782,7 +808,7 @@ async function main() {
       await mp.screenshot({ path: path.join(OUT, 'mobile-failure.png'), fullPage: true });
       const diag = await mp.evaluate(() => ({
         ctrl: document.querySelector('.ctrl')?.innerText.replace(/\n/g, ' | '),
-        toasts: [...document.querySelectorAll('[data-testid="toast"]')].map((t) => t.innerText),
+        toasts: window.__toastLog,
         thumbs: document.querySelector('.thumbs')?.innerText.replace(/\n/g, ' '),
       }));
       throw new Error(`${e.message.split('\n')[0]} — ${JSON.stringify(diag)}`);
@@ -790,6 +816,105 @@ async function main() {
     await m.close();
     assert(st.overflow <= 0 && st.navPos === 'fixed' && st.meter && st.frameW > 300, JSON.stringify(st));
     return `nav=${st.navPos}, 미리보기 폭 ${Math.round(st.frameW)}px, 미터 표시, 모바일 녹화 OK`;
+  });
+
+  const IPHONE_UA =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  const ANDROID_UA =
+    'Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36';
+  const phone = (ua, extra = {}) =>
+    A.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3, userAgent: ua, ...extra });
+
+  await test('모바일: 카카오톡 인앱 브라우저 감지 → 외부 브라우저 열기 안내', async () => {
+    const m = await phone(`${ANDROID_UA} KAKAOTALK 10.8.0`);
+    const mp = await m.newPage();
+    await mp.goto(base);
+    await mp.getByTestId('env-notice').waitFor();
+    const text = await mp.getByTestId('env-notice').innerText();
+    const href = await mp.getByTestId('open-external').getAttribute('href');
+    await m.close();
+    assert(text.includes('카카오톡') && href.startsWith('kakaotalk://web/openExternal?url='), `${text} ${href}`);
+    const ok = await phone(IPHONE_UA);
+    const op = await ok.newPage();
+    await op.goto(base);
+    await sleep(300);
+    const none = await op.getByTestId('env-notice').count();
+    await ok.close();
+    assert(none === 0, '일반 Safari UA 에서는 안내가 없어야 함');
+    return `안내 표시, 버튼 → ${href.slice(0, 40)}…; 일반 iPhone Safari UA 에서는 미표시`;
+  });
+
+  await test('모바일(아이폰 UA): 녹화 → 공유 시트로 사진 앱 저장', async () => {
+    const m = await phone(IPHONE_UA);
+    await m.addInitScript(() => {
+      window.__shared = null;
+      navigator.canShare = (d) => !!(d && d.files && d.files.length);
+      navigator.share = async (d) => {
+        window.__shared = d.files.map((f) => [f.name, f.type, f.size]);
+      };
+    });
+    const mp = await m.newPage();
+    await mp.goto(base);
+    await mp.getByTestId('start-devices').click();
+    await mp.getByTestId('actual-resolution').waitFor();
+    await sleep(800);
+    await mp.getByTestId('record-start').click();
+    await mp.getByTestId('rec-indicator').waitFor();
+    await sleep(1500);
+    await mp.getByTestId('record-stop').click();
+    await mp.getByTestId('review-card').waitFor({ timeout: 15000 });
+    await mp.getByTestId('review-card').getByTestId('share-button').click();
+    await mp.waitForFunction(() => window.__shared !== null);
+    const shared = await mp.evaluate(() => window.__shared);
+    await m.close();
+    assert(shared.length === 1 && shared[0][2] > 1000 && shared[0][1].startsWith('video/'), JSON.stringify(shared));
+    return `공유 파일 ${shared[0][0]} (${shared[0][1]}, ${shared[0][2]} bytes)`;
+  });
+
+  await test('모바일: 지원 형식을 하나도 보고하지 않는 브라우저에서도 기본 형식으로 녹화', async () => {
+    const m = await phone(ANDROID_UA);
+    await m.addInitScript(() => {
+      MediaRecorder.isTypeSupported = () => false;
+    });
+    const mp = await m.newPage();
+    await mp.goto(base);
+    await mp.getByTestId('start-devices').click();
+    await mp.getByTestId('actual-resolution').waitFor();
+    const label = await mp.locator('.ctrl__fmt').innerText();
+    await mp.getByTestId('record-start').click();
+    await mp.getByTestId('rec-indicator').waitFor();
+    await sleep(1500);
+    await mp.getByTestId('record-stop').click();
+    await mp.getByTestId('review-card').waitFor({ timeout: 15000 });
+    await mp.getByTestId('review-card').getByRole('button', { name: '재생', exact: true }).click();
+    const src = await mp.getByTestId('viewer-video').getAttribute('src');
+    const r = await mp.evaluate(ANALYZE_VIDEO, src);
+    const name = await mp.getByTestId('media-viewer').locator('h2').innerText();
+    await m.close();
+    assert(label.includes('브라우저 기본'), label);
+    assert(r.size > 1000 && r.playedTo > 0 && !r.audio.error, JSON.stringify(r));
+    return `"${label}" → ${name}, ${r.size} bytes, 재생·오디오 확인`;
+  });
+
+  await test('모바일: 앱 전환으로 끊긴 카메라를 화면 복귀 시 자동 재연결', async () => {
+    const m = await phone(IPHONE_UA);
+    const mp = await m.newPage();
+    await mp.goto(base);
+    await mp.getByTestId('start-devices').click();
+    await mp.getByTestId('actual-resolution').waitFor();
+    // iOS 가 백그라운드에서 트랙을 끝내는 상황: 실제로 트랙을 멈추고 ended 이벤트를 보낸다.
+    await mp.getByTestId('preview-video').evaluate((v) => {
+      const t = v.srcObject.getVideoTracks()[0];
+      t.stop();
+      t.dispatchEvent(new Event('ended'));
+    });
+    await mp.getByTestId('camera-error').waitFor();
+    await mp.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await mp.getByTestId('actual-resolution').waitFor({ timeout: 10000 });
+    const live = await mp.getByTestId('preview-video').evaluate((v) => v.srcObject.getVideoTracks()[0].readyState);
+    await m.close();
+    assert(live === 'live', live);
+    return '연결 끊김 표시 → 화면 복귀 시 버튼 없이 재연결';
   });
 
   await test('콘솔 오류 없음', async () => {

@@ -2027,3 +2027,63 @@ input[type='range'] {
     --muted: #b8c1d4;
   }
 }
+
+/* ---------- 모바일 보완 ---------- */
+.env-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 204, 61, 0.55);
+  background: rgba(255, 204, 61, 0.08);
+  color: #ffe08a;
+  flex-wrap: wrap;
+}
+.env-notice__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 200px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.env-notice__text b {
+  color: #ffe08a;
+}
+.env-notice__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+a.btn {
+  text-decoration: none;
+}
+/* 더블탭 확대 방지·즉각 반응 */
+button,
+a,
+input,
+select,
+label {
+  touch-action: manipulation;
+}
+.topbar {
+  padding-top: max(10px, env(safe-area-inset-top));
+}
+@media (max-width: 760px) {
+  /* iOS 는 16px 미만 입력창에 포커스하면 화면을 확대한다 */
+  .input,
+  .select {
+    font-size: 16px;
+  }
+  .shutter {
+    width: 78px;
+    height: 78px;
+  }
+  .shutter__inner {
+    width: 60px;
+    height: 60px;
+  }
+}

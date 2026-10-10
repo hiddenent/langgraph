@@ -74,6 +74,12 @@ export function SettingsPage() {
               checked={settings.ui.autoStart}
               onChange={(x) => patch('ui', { autoStart: x })}
             />
+            <Toggle
+              label="휴대폰 세로 방향 자동 맞춤"
+              checked={settings.ui.autoOrient}
+              onChange={(x) => patch('ui', { autoOrient: x })}
+              hint="휴대폰을 세로로 들면 16:9·4:3 설정을 9:16·3:4 로 자동 전환합니다."
+            />
             <button type="button" className="btn btn--ghost" onClick={() => setConfirmReset(true)}>
               <Icon name="refresh" /> 모든 설정 초기화
             </button>

@@ -16,6 +16,7 @@ import {
   stopStream,
   trackCapabilities,
 } from '../core/devices';
+import { releaseSharedAudioContext, unlockAudio } from '../core/mobile';
 import type { Settings, StudioMode } from '../core/settings';
 
 export type DeviceStatus = 'off' | 'starting' | 'live' | 'error' | 'disconnected';
@@ -262,6 +263,8 @@ export function useMediaSession({ settings, mode, locked, onTrackEnded }: Option
   /** 최초 시작: 한 번의 권한 요청으로 카메라·마이크를 함께 연다. */
   const start = useCallback(async () => {
     if (apiError) return;
+    // 반드시 첫 await 전에(사용자 터치 안에서) 호출해야 iOS 에서 오디오 미터가 동작한다.
+    unlockAudio();
     const wantMic = micWanted;
     camSeq.current++;
     micSeq.current++;
@@ -311,6 +314,7 @@ export function useMediaSession({ settings, mode, locked, onTrackEnded }: Option
     setCamera(EMPTY);
     setMic(EMPTY);
     setStarted(false);
+    releaseSharedAudioContext();
   }, []);
 
   // 설정 변경 → 카메라 재연결
@@ -353,6 +357,7 @@ export function useMediaSession({ settings, mode, locked, onTrackEnded }: Option
       if (!e.persisted) {
         stopStream(camRef.current);
         stopStream(micRef.current);
+        releaseSharedAudioContext();
       }
     };
     window.addEventListener('pagehide', onHide);
@@ -364,6 +369,7 @@ export function useMediaSession({ settings, mode, locked, onTrackEnded }: Option
   }, []);
 
   const retryCamera = useCallback(() => {
+    unlockAudio();
     if (!started) {
       void start();
       return;
@@ -372,12 +378,35 @@ export function useMediaSession({ settings, mode, locked, onTrackEnded }: Option
   }, [started, start, acquireCamera, camKey, videoReq]);
 
   const retryMic = useCallback(() => {
+    unlockAudio();
     if (!started) {
       void start();
       return;
     }
     void acquireMic(micKey, audioReq);
   }, [started, start, acquireMic, micKey, audioReq]);
+
+  // 모바일(특히 iOS)은 앱 전환·잠금·전화 수신 시 카메라·마이크 트랙을 끝내 버린다.
+  // 화면으로 돌아오면(녹화 중이 아닐 때) 끊긴 장치를 자동으로 다시 연결한다.
+  const latest = useRef({ started, locked, camKey, videoReq, micKey, audioReq, micWanted });
+  latest.current = { started, locked, camKey, videoReq, micKey, audioReq, micWanted };
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const l = latest.current;
+      if (!l.started || l.locked) return;
+      const v = camRef.current?.getVideoTracks()[0];
+      if (!v || v.readyState === 'ended') void acquireCamera(l.camKey, l.videoReq);
+      const a = micRef.current?.getAudioTracks()[0];
+      if (l.micWanted && (!a || a.readyState === 'ended')) void acquireMic(l.micKey, l.audioReq);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onVisible);
+    };
+  }, [acquireCamera, acquireMic]);
 
   const refreshTrackInfo = useCallback(() => {
     const v = camRef.current?.getVideoTracks()[0];

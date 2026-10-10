@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageFormat, IMAGE_FORMATS, detectImageFormats } from '../core/codecs';
 import { EFFECT_LABELS, isNeutral } from '../core/colorMatrix';
 import { runCountdown, sleep } from '../core/countdown';
-import { aspectRatioOf } from '../core/devices';
 import { buildFileName } from '../core/format';
 import { capturePhoto, createImageCapture, imageCaptureSupported, loadImage, makeThumbnail } from '../core/photo';
 import type { Settings } from '../core/settings';
@@ -30,6 +29,8 @@ interface Options {
   videoEl: React.RefObject<HTMLVideoElement>;
   cameraTrack: MediaStreamTrack | null;
   digitalZoom: number;
+  /** 실제 적용할 화면 비율(휴대폰 세로 방향 자동 전환 반영) */
+  aspectRatio: number;
   onSaved: (item: MediaItem) => void;
   notify: (kind: 'info' | 'success' | 'warning' | 'error', msg: string) => void;
 }
@@ -60,7 +61,7 @@ export function usePhotoCapture(o: Options): PhotoCaptureHandle {
   }, []);
 
   const shootOnce = useCallback(async (): Promise<boolean> => {
-    const { settings: s, videoEl, cameraTrack, digitalZoom } = optsRef.current;
+    const { settings: s, videoEl, cameraTrack, digitalZoom, aspectRatio } = optsRef.current;
     const v = videoEl.current;
     if (!v || !cameraTrack || cameraTrack.readyState !== 'live' || !v.videoWidth) {
       optsRef.current.notify('error', '카메라가 준비되지 않아 사진을 찍을 수 없습니다.');
@@ -76,7 +77,7 @@ export function usePhotoCapture(o: Options): PhotoCaptureHandle {
       const shot = await capturePhoto(
         v,
         {
-          aspect: aspectRatioOf(p.aspect),
+          aspect: aspectRatio,
           digitalZoom,
           mirror: p.mirrorFile,
           rotation: p.rotation,
@@ -110,7 +111,7 @@ export function usePhotoCapture(o: Options): PhotoCaptureHandle {
         meta: {
           형식: format.label + (format.lossy ? ` (품질 ${Math.round(p.quality * 100)}%)` : ''),
           '캡처 방식': shot.source === 'imagecapture' ? 'ImageCapture.takePhoto (카메라 사진 해상도)' : '미리보기 프레임 캡처',
-          화면비율: p.aspect,
+          화면비율: aspectRatio < 1 && p.aspect !== '9:16' ? `${p.aspect} (세로 방향 자동 전환)` : p.aspect,
           '디지털 확대': digitalZoom > 1 ? `${digitalZoom.toFixed(1)}×` : '없음',
           '색 보정(소프트웨어)': isNeutral(p.color)
             ? '없음'

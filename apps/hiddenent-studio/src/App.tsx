@@ -15,7 +15,8 @@ import {
 } from './components/Panels';
 import { PreviewStage } from './components/PreviewStage';
 import { ConfirmDialog, isModalOpen } from './components/ui';
-import { queryPermission } from './core/devices';
+import { aspectRatioOf, queryPermission } from './core/devices';
+import { orientAspect } from './core/mobile';
 import { Settings, StudioMode, loadSettings, saveSettings } from './core/settings';
 import { disposeSound } from './core/sound';
 import type { MediaItem } from './core/storage';
@@ -28,6 +29,7 @@ import { useToasts } from './hooks/useToasts';
 import { useVideoRecorder } from './hooks/useVideoRecorder';
 import { Section, Studio, StudioContext } from './StudioContext';
 import { SettingsPage } from './components/SettingsPage';
+import { EnvironmentNotice } from './components/EnvironmentNotice';
 
 const NAV: { id: Section; label: string; icon: string; key?: string }[] = [
   { id: 'video', label: '동영상 촬영', icon: 'video', key: 'V' },
@@ -97,6 +99,10 @@ export default function App() {
   const micLabel = session.mic.track?.label ?? '';
   const addItem = useCallback((item: MediaItem) => void library.add(item), [library]);
 
+  // 휴대폰을 세로로 들면(세로 프레임) 가로 비율 설정을 세로 비율로 자동 전환한다.
+  const videoRatio = orientAspect(aspectRatioOf(settings.video.aspect), videoSize, settings.ui.autoOrient);
+  const photoRatio = orientAspect(aspectRatioOf(settings.photo.aspect), videoSize, settings.ui.autoOrient);
+
   const recorder = useVideoRecorder({
     settings,
     videoEl: videoRef,
@@ -104,6 +110,7 @@ export default function App() {
     micTrack: session.mic.track,
     micLabel,
     digitalZoom,
+    aspectRatio: videoRatio,
     videoSize,
     onSaved: addItem,
     notify,
@@ -113,6 +120,7 @@ export default function App() {
     videoEl: videoRef,
     cameraTrack: session.camera.track,
     digitalZoom,
+    aspectRatio: photoRatio,
     onSaved: addItem,
     notify,
   });
@@ -395,6 +403,7 @@ export default function App() {
           </nav>
 
           <main id="main" className="main">
+            <EnvironmentNotice />
             <div className={`studio ${showLeft ? '' : 'studio--noleft'} ${showRight ? '' : 'studio--noright'}`} hidden={!inStudio}>
               <aside className="side side--left" hidden={!showLeft} aria-label={`${mode === 'video' ? '동영상' : '사진'} 촬영 설정`}>
                 {mode === 'video' ? <VideoSettingsPanel /> : <PhotoSettingsPanel />}
@@ -419,7 +428,7 @@ export default function App() {
                   camera={session.camera}
                   started={session.started}
                   apiError={session.apiError}
-                  aspect={modeSettings.aspect}
+                  ratio={mode === 'video' ? videoRatio : photoRatio}
                   mirror={modeSettings.mirrorPreview}
                   zoom={settings.zoom}
                   hardwareZoom={Boolean(hardwareZoom)}

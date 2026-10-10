@@ -72,7 +72,7 @@ export interface Settings {
   };
   zoom: number;
   library: { autoPersist: boolean };
-  ui: { countdownSound: boolean; collapseWhileRecording: boolean; keepMicInPhoto: boolean; autoStart: boolean };
+  ui: { countdownSound: boolean; collapseWhileRecording: boolean; keepMicInPhoto: boolean; autoStart: boolean; autoOrient: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -130,7 +130,7 @@ export const DEFAULT_SETTINGS: Settings = {
   guides: { visible: true, crosshair: false, thirds: true, golden: false, safe: false, horizon: false, histogram: false },
   zoom: 1,
   library: { autoPersist: false },
-  ui: { countdownSound: true, collapseWhileRecording: true, keepMicInPhoto: true, autoStart: false },
+  ui: { countdownSound: true, collapseWhileRecording: true, keepMicInPhoto: true, autoStart: false, autoOrient: true },
 };
 
 /** 품질 프리셋 → 비디오 비트레이트(bps). auto 는 브라우저 기본값(undefined). */

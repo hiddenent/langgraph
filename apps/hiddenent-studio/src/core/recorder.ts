@@ -18,6 +18,9 @@ export interface RecordingResult {
   interrupted: boolean;
 }
 
+/** 정지 시 첫 녹화 데이터를 기다리는 최대 시간 */
+export const FIRST_DATA_WAIT_MS = 4000;
+
 export type RecorderPhase = 'inactive' | 'recording' | 'paused';
 
 export function canPauseRecording(): boolean {
@@ -65,10 +68,18 @@ export class StudioRecorder {
     if (this.recorder && this.recorder.state !== 'inactive') {
       throw new Error('이미 녹화 중입니다.');
     }
-    const options: MediaRecorderOptions = { mimeType: opts.mimeType };
+    const options: MediaRecorderOptions = {};
+    if (opts.mimeType) options.mimeType = opts.mimeType;
     if (opts.videoBitsPerSecond) options.videoBitsPerSecond = opts.videoBitsPerSecond;
     if (opts.audioBitsPerSecond) options.audioBitsPerSecond = opts.audioBitsPerSecond;
-    const rec = new MediaRecorder(stream, options);
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(stream, options);
+    } catch (e) {
+      // 일부 모바일 브라우저(구형 iOS 등)는 형식 지정이나 비트레이트 옵션을 거부한다 → 브라우저 기본값으로 재시도
+      if (!options.mimeType && !options.videoBitsPerSecond) throw e;
+      rec = new MediaRecorder(stream);
+    }
     this.recorder = rec;
     this.chunks = [];
     this.bytesSoFar = 0;
@@ -115,18 +126,45 @@ export class StudioRecorder {
   }
 
   /** 녹화를 정상 종료하고 결과 파일을 돌려준다. */
-  stop(): Promise<RecordingResult | null> {
-    if (!this.recorder || !this.stopPromise) return Promise.resolve(null);
+  async stop(): Promise<RecordingResult | null> {
+    if (!this.recorder || !this.stopPromise) return null;
     this.stopRequested = true;
-    if (this.recorder.state !== 'inactive') {
-      try {
-        this.recorder.requestData();
-      } catch {
-        /* 일부 브라우저는 paused 상태에서 requestData 를 거부한다 */
+    const rec = this.recorder;
+    if (rec.state !== 'inactive') {
+      // 인코더가 첫 데이터를 내기 전에 정지하면 빈 파일이 된다(느린 휴대폰·CPU 부하·아주 짧은 녹화).
+      // 첫 데이터가 도착할 때까지(최대 FIRST_DATA_WAIT_MS) 데이터를 요청하며 기다린 뒤 정지한다.
+      await this.waitForFirstData(rec);
+      // await 동안 브라우저가 스스로 녹화를 끝냈을 수 있다.
+      if ((rec.state as RecordingState) !== 'inactive') {
+        try {
+          rec.requestData();
+        } catch {
+          /* 일부 브라우저는 paused 상태에서 requestData 를 거부한다 */
+        }
+        rec.stop();
       }
-      this.recorder.stop();
     }
     return this.stopPromise;
+  }
+
+  private async waitForFirstData(rec: MediaRecorder): Promise<void> {
+    const deadline = performance.now() + FIRST_DATA_WAIT_MS;
+    while (this.bytesSoFar === 0 && rec.state !== 'inactive' && performance.now() < deadline) {
+      if (rec.state === 'paused') {
+        // 일시정지 중에는 새 프레임이 들어오지 않으므로 잠깐 재개해 데이터를 받는다.
+        try {
+          rec.resume();
+        } catch {
+          break;
+        }
+      }
+      try {
+        rec.requestData();
+      } catch {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
   }
 
   /** 녹화를 취소하고 데이터를 폐기한다. */

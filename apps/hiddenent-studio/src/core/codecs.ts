@@ -23,6 +23,8 @@ const CANDIDATES: Candidate[] = [
   { mime: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', container: 'mp4', video: 'H.264 Baseline', audio: 'AAC' },
   { mime: 'video/mp4;codecs=avc1,mp4a.40.2', container: 'mp4', video: 'H.264', audio: 'AAC' },
   { mime: 'video/mp4;codecs=avc1,opus', container: 'mp4', video: 'H.264', audio: 'Opus' },
+  // iOS Safari 는 따옴표·공백이 있는 표기만 인식하는 버전이 있다.
+  { mime: 'video/mp4;codecs="avc1.42E01E, mp4a.40.2"', container: 'mp4', video: 'H.264 Baseline', audio: 'AAC' },
   { mime: 'video/webm;codecs=vp9,opus', container: 'webm', video: 'VP9', audio: 'Opus' },
   { mime: 'video/webm;codecs=vp8,opus', container: 'webm', video: 'VP8', audio: 'Opus' },
   { mime: 'video/webm;codecs=av01,opus', container: 'webm', video: 'AV1', audio: 'Opus' },
@@ -73,6 +75,18 @@ export function getSupportedFormats(
       audioCodec: c.audio,
       extension: EXT[c.container],
       label: `${c.container.toUpperCase()} · ${c.video}${c.audio ? ` + ${c.audio}` : ' (오디오 없음)'}`,
+    });
+  }
+  if (out.length === 0) {
+    // isTypeSupported 가 아무것도 인정하지 않아도 MediaRecorder 자체는 동작하는 모바일 브라우저가 있다.
+    // 형식을 지정하지 않고 브라우저 기본값으로 녹화하며, 실제 형식은 녹화 후 파일에서 확인한다.
+    out.push({
+      mimeType: '',
+      container: 'mp4',
+      videoCodec: '브라우저 기본',
+      audioCodec: withAudio ? '브라우저 기본' : null,
+      extension: 'mp4',
+      label: '브라우저 기본 형식(녹화 후 확인)',
     });
   }
   return out;

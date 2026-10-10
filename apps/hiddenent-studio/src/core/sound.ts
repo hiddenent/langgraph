@@ -1,15 +1,12 @@
 // 카운트다운·셔터 효과음. 짧은 합성음만 재생하며 마이크 입력은 절대 스피커로 출력하지 않는다.
+// 오디오 미터와 같은 공유 AudioContext 를 사용한다(iOS 의 개수 제한·자동재생 정책 대응).
 
-let ctx: AudioContext | null = null;
+import { getSharedAudioContext, releaseSharedAudioContext } from './mobile';
 
 function getCtx(): AudioContext | null {
-  try {
-    if (!ctx || ctx.state === 'closed') ctx = new AudioContext();
-    if (ctx.state === 'suspended') void ctx.resume();
-    return ctx;
-  } catch {
-    return null;
-  }
+  const ctx = getSharedAudioContext();
+  if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+  return ctx;
 }
 
 function tone(freq: number, durationMs: number, gainValue = 0.08, type: OscillatorType = 'sine'): void {
@@ -53,6 +50,5 @@ export function recordStartSound(): void {
 }
 
 export function disposeSound(): void {
-  if (ctx && ctx.state !== 'closed') void ctx.close().catch(() => undefined);
-  ctx = null;
+  releaseSharedAudioContext();
 }

@@ -4,13 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CanvasPipeline, canvasCaptureSupported } from '../core/canvasPipeline';
 import { RecordingFormat, extensionForMime, getSupportedFormats, pickFormat } from '../core/codecs';
 import { runCountdown } from '../core/countdown';
-import { aspectRatioOf } from '../core/devices';
 import { buildFileName, formatBitrate } from '../core/format';
 import { makeThumbnail } from '../core/photo';
 import { StudioRecorder, canPauseRecording } from '../core/recorder';
 import { Settings, videoBitrateFor } from '../core/settings';
 import { countdownBeep, recordStartSound } from '../core/sound';
 import { MediaItem, newId } from '../core/storage';
+
+function ratioLabel(r: number): string {
+  const known: [number, string][] = [[16 / 9, '16:9'], [9 / 16, '9:16'], [4 / 3, '4:3'], [3 / 4, '3:4'], [1, '1:1']];
+  const hit = known.find(([v]) => Math.abs(v - r) < 0.01);
+  return hit ? hit[1] : r.toFixed(2);
+}
 
 export type RecordPhase = 'idle' | 'countdown' | 'recording' | 'paused' | 'finalizing';
 
@@ -46,6 +51,8 @@ interface Options {
   micTrack: MediaStreamTrack | null;
   micLabel: string;
   digitalZoom: number;
+  /** 실제 적용할 화면 비율(휴대폰 세로 방향 자동 전환 반영) */
+  aspectRatio: number;
   /** 미리보기 video 요소가 보고한 실제 프레임 크기 */
   videoSize: { w: number; h: number };
   onSaved: (item: MediaItem) => void;
@@ -84,8 +91,8 @@ export function useVideoRecorder(o: Options): VideoRecorderHandle {
   const plan = useMemo<RecordingPlan>(() => {
     const reasons: string[] = [];
     const { w, h } = o.videoSize;
-    const target = aspectRatioOf(settings.video.aspect);
-    if (w && h && Math.abs(w / h - target) / target > 0.02) reasons.push(`카메라 출력 비율(${w}×${h})을 ${settings.video.aspect}로 자르기`);
+    const target = o.aspectRatio;
+    if (w && h && Math.abs(w / h - target) / target > 0.02) reasons.push(`카메라 출력 비율(${w}×${h})을 ${ratioLabel(target)}로 자르기`);
     if (o.digitalZoom > 1.001) reasons.push(`디지털 확대 ${o.digitalZoom.toFixed(1)}× 적용`);
     if (settings.video.mirrorFile) reasons.push('파일 좌우 반전 저장');
     if (reasons.length === 0) return { pipeline: 'direct', reason: '카메라 원본 스트림을 그대로 녹화(최고 품질)' };
@@ -93,7 +100,7 @@ export function useVideoRecorder(o: Options): VideoRecorderHandle {
       return { pipeline: 'direct', reason: `이 브라우저는 캔버스 녹화를 지원하지 않아 원본 그대로 녹화합니다(${reasons.join(', ')} 미적용)` };
     }
     return { pipeline: 'canvas', reason: `캔버스 처리 녹화: ${reasons.join(', ')}` };
-  }, [o.videoSize, settings.video.aspect, settings.video.mirrorFile, o.digitalZoom]);
+  }, [o.videoSize, o.aspectRatio, settings.video.mirrorFile, o.digitalZoom]);
 
   // 경과 시간 표시 및 시간 제한
   useEffect(() => {
@@ -215,7 +222,7 @@ export function useVideoRecorder(o: Options): VideoRecorderHandle {
     if (plan.pipeline === 'canvas') {
       try {
         const pipe = new CanvasPipeline(v, {
-          aspect: aspectRatioOf(s.video.aspect),
+          aspect: optsRef.current.aspectRatio,
           zoom: optsRef.current.digitalZoom,
           mirror: s.video.mirrorFile,
           fps: s.video.frameRate,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ColorAdjust, buildColorMatrix, isNeutral, matrixToSvgValues } from '../core/colorMatrix';
-import { aspectRatioOf, AspectId, FriendlyError } from '../core/devices';
+import { FriendlyError } from '../core/devices';
 import { formatDateTime, formatDuration } from '../core/format';
 import type { Settings, StudioMode } from '../core/settings';
 import type { TrackState } from '../hooks/useMediaSession';
@@ -14,7 +14,8 @@ interface Props {
   camera: TrackState;
   started: boolean;
   apiError: FriendlyError | null;
-  aspect: AspectId;
+  /** 실제 적용할 화면 비율(가로/세로) */
+  ratio: number;
   mirror: boolean;
   zoom: number;
   hardwareZoom: boolean;
@@ -49,6 +50,16 @@ export function PreviewStage(p: Props) {
     }
   }, [camera.stream, videoRef]);
 
+  // 모바일에서 앱 전환 후 돌아오면 미리보기 video 가 멈춰 있는 경우가 있어 다시 재생한다.
+  useEffect(() => {
+    const onVisible = () => {
+      const v = videoRef.current;
+      if (document.visibilityState === 'visible' && v && v.srcObject && v.paused) void v.play().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [videoRef]);
+
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -62,7 +73,7 @@ export function PreviewStage(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoRef, p.onVideoSize]);
 
-  const ratio = aspectRatioOf(p.aspect);
+  const ratio = p.ratio;
   const colorOn = p.color && !isNeutral(p.color);
   const matrixValues = useMemo(() => (p.color && colorOn ? matrixToSvgValues(buildColorMatrix(p.color)) : ''), [p.color, colorOn]);
   const digitalScale = p.hardwareZoom ? 1 : p.zoom;
